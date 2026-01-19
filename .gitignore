@@ -1,0 +1,60 @@
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.out
+*.test
+/bin/
+/dist/
+/orderbook
+/orderbook-test
+
+# Go build cache
+*.a
+*.o
+/tmp/
+.cache/
+
+# Dependency directories
+vendor/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker volumes
+postgres_data/
+redis_data/
+rabbitmq_data/
+
+# Coverage
+coverage.txt
+coverage.html
+*.coverprofile
+
+# k6 results
+results/
+
+# Local-only tests
+*_test_local.go
