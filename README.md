@@ -3,7 +3,7 @@
 This project is a practical implementation of a **limit order book matching engine**, similar to what is used in crypto exchanges.
 It is built to demonstrate system design, concurrency handling, and clean Go architecture.
 
-The system supports limit buy/sell orders, price-time (FIFO) matching, async processing using RabbitMQ, caching with Redis, and real-time updates via WebSocket.
+The system supports limit buy/sell orders, price-time (FIFO) matching, asynchronous processing using RabbitMQ, caching with Redis, and real-time updates via WebSocket.
 
 ---
 
@@ -19,15 +19,15 @@ The system supports limit buy/sell orders, price-time (FIFO) matching, async pro
 * Redis for order book snapshots
 * WebSocket for real-time order book updates
 * REST APIs for admin and users
-* Order cancellation
-* Message deduplication (exactly-once processing)
-* Connection pooling and optimization
+* Order cancellation (basic support)
+* Message deduplication (effectively-once processing)
+* Connection pooling and performance optimizations
 
 ---
 
 ## Tech Stack
 
-* Go 1.23+ (Gin framework)
+* Go **1.21+** (Gin framework)
 * PostgreSQL 15+
 * Redis 7+
 * RabbitMQ 3.12+
@@ -51,7 +51,7 @@ internal/
   cache/      → Redis caching layer
   ws/         → WebSocket server
   config/     → Environment configuration
-  metrics/    → Prometheus metrics
+  metrics/    → Metrics collection
   middleware/ → Auth, rate limiting, circuit breaker
 
 migrations/   → SQL migration files
@@ -64,19 +64,20 @@ docker-compose.yml
 ## How It Works (High Level)
 
 1. Orders are placed via REST API
-2. Orders are matched immediately in-memory (price-time priority)
+2. Orders are matched immediately in-memory using price-time priority
 3. Trade events and order updates are published to RabbitMQ
-4. Async workers consume messages and persist to PostgreSQL
+4. Async consumers persist data to PostgreSQL
 5. Order book snapshots are cached in Redis
 6. Updates are broadcast to clients via WebSocket
 
-**Key Design Decision**: Matching happens synchronously in-memory for low latency, while persistence is asynchronous to avoid blocking the matching engine.
+**Key Design Decision**
+Matching is performed synchronously in memory for low latency, while database persistence is handled asynchronously to avoid blocking the matching engine.
 
 ---
 
 ## Requirements
 
-* Go 1.23+
+* Go 1.21+
 * Docker & Docker Compose
 
 ---
@@ -99,14 +100,13 @@ docker compose up -d
 ```
 
 This starts:
+
 * PostgreSQL (port 5432)
 * Redis (port 6379)
 * RabbitMQ (ports 5672, 15672)
 
 RabbitMQ Management UI:
 `http://localhost:15672` (guest / guest)
-
-**Note**: Database migrations run automatically on PostgreSQL startup via `docker-entrypoint-initdb.d`.
 
 ---
 
@@ -127,6 +127,7 @@ go run cmd/server/main.go
 The server starts on `http://localhost:8080` by default.
 
 The server includes:
+
 * HTTP API server
 * In-memory matching engine
 * RabbitMQ consumer workers
@@ -136,7 +137,7 @@ The server includes:
 
 ## Configuration
 
-Configuration is managed via environment variables (with sensible defaults):
+Configuration is managed via environment variables with sensible defaults:
 
 ```env
 SERVER_PORT=:8080
@@ -158,7 +159,8 @@ WORKER_COUNT=4
 WS_ENABLED=true
 ```
 
-**Note**: The application gracefully handles missing services (Redis/RabbitMQ) and continues to operate with reduced functionality.
+**Note**
+The system is designed to tolerate temporary Redis or RabbitMQ unavailability with reduced functionality.
 
 ---
 
@@ -166,7 +168,7 @@ WS_ENABLED=true
 
 ### Add Currency Pair (Admin)
 
-```bash
+```http
 POST /api/pairs
 Content-Type: application/json
 
@@ -180,7 +182,7 @@ Content-Type: application/json
 
 ### Place Order
 
-```bash
+```http
 POST /api/orders
 Content-Type: application/json
 
@@ -197,30 +199,29 @@ Content-Type: application/json
 
 ### View Order Book
 
-```bash
+```http
 GET /api/pairs/BTC/USDT/book?levels=10
 ```
 
 Response:
+
 ```json
 {
   "pair": "BTC/USDT",
   "bids": [
-    {"price": 29400, "quantity": 1.5},
-    {"price": 29350, "quantity": 2.0}
+    { "price": 29400, "quantity": 1.5 }
   ],
   "asks": [
-    {"price": 29600, "quantity": 1.0},
-    {"price": 29650, "quantity": 1.5}
+    { "price": 29600, "quantity": 1.0 }
   ]
 }
 ```
 
 ---
 
-### Get Ticker (Best Bid/Ask)
+### Get Ticker (Best Bid / Ask)
 
-```bash
+```http
 GET /api/pairs/BTC/USDT/ticker
 ```
 
@@ -228,7 +229,7 @@ GET /api/pairs/BTC/USDT/ticker
 
 ### User Orders
 
-```bash
+```http
 GET /api/orders?user_id=1
 ```
 
@@ -236,7 +237,7 @@ GET /api/orders?user_id=1
 
 ### Cancel Order
 
-```bash
+```http
 DELETE /api/orders/:id?pair=BTC/USDT
 ```
 
@@ -250,28 +251,33 @@ Real-time order book updates:
 ws://localhost:8080/ws/BTC/USDT
 ```
 
-**Message Types**:
-* `trade`: Trade execution
-* `order_update`: Order status change
-* `orderbook_update`: Order book depth change
+**Message Types**
+
+* `trade` – Trade execution
+* `order_update` – Order status change
+* `orderbook_update` – Order book depth update
 
 ---
 
 ## Database Schema
 
 ### Orders
-- `id`, `user_id`, `pair`, `side`, `price`, `quantity`, `filled`, `status`, `created_at`
+
+* `id`, `user_id`, `pair`, `side`, `price`, `quantity`, `filled`, `status`, `created_at`
 
 ### Trades
-- `id`, `buy_order_id`, `sell_order_id`, `price`, `quantity`, `created_at`
+
+* `id`, `buy_order_id`, `sell_order_id`, `price`, `quantity`, `created_at`
 
 ### Currencies
-- `code`, `name`, `precision`, `min_amount`, `is_active`, `created_at`, `updated_at`
+
+* `code`, `name`, `precision`, `min_amount`, `is_active`, `created_at`, `updated_at`
 
 ### Currency Pairs
-- `base`, `quote`, `is_active`, `created_at`, `updated_at`
 
-See `migrations/` directory for full schema definitions.
+* `base`, `quote`, `is_active`, `created_at`, `updated_at`
+
+See the `migrations/` directory for full schema definitions.
 
 ---
 
@@ -295,9 +301,7 @@ go test ./tests/integration/... -v
 go test ./internal/engine -bench=. -benchmem
 ```
 
-### Load Testing
-
-Using k6:
+### Load Testing (k6)
 
 ```bash
 k6 run tests/load/k6_orderbook.js
@@ -307,45 +311,38 @@ k6 run tests/load/k6_orderbook.js
 
 ## Matching Algorithm
 
-**Price-Time Priority (FIFO)**:
+**Price-Time Priority (FIFO)**
 
-* **Buy Orders**: Matched against lowest-priced sell orders first
-  - Price priority: Higher buy price first
-  - Time priority: Earlier orders first
+* **Buy Orders**
 
-* **Sell Orders**: Matched against highest-priced buy orders first
-  - Price priority: Lower sell price first
-  - Time priority: Earlier orders first
+  * Higher price first
+  * Earlier orders first
 
-**Order States**: `open`, `partial`, `filled`, `cancelled`
+* **Sell Orders**
+
+  * Lower price first
+  * Earlier orders first
+
+**Order States**
+`open`, `partial`, `filled`, `cancelled`
 
 ---
 
 ## Performance
 
-**Complexity**:
-* Insert Order: O(log n)
-* Match Order: O(k log n)
-* Get Best Price: O(1)
-* Cancel Order: O(n)
-* Get Depth (k levels): O(k)
+**Time Complexity**
 
-**Target Performance**:
-* Sub-millisecond matching latency
-* 10,000+ orders/second throughput
+* Insert order: `O(log n)`
+* Match order: `O(k log n)`
+* Best price lookup: `O(1)`
+* Cancel order: `O(n)`
+* Depth query (k levels): `O(k)`
+
+**Design Targets**
+
+* Low-latency in-memory matching
+* High throughput under concurrent load
 * Real-time WebSocket updates
-
----
-
-## Notes
-
-* Matching is price-time priority (FIFO)
-* Only limit orders are supported (no market orders)
-* Matching happens synchronously in-memory for low latency
-* Persistence is asynchronous via RabbitMQ workers
-* The system gracefully degrades if Redis/RabbitMQ are unavailable
-* All models include validation methods
-* Database migrations are versioned and tracked
 
 ---
 
@@ -355,15 +352,17 @@ This project was built as a **practical assessment** to demonstrate:
 
 * System design and architecture
 * Concurrency handling in Go
-* Clean Go architecture and patterns
-* Real-world backend patterns used in exchanges
+* Clean and maintainable code structure
+* Exchange-style backend patterns
 * Database design and migrations
-* Async processing and message queues
-* Performance optimization techniques
+* Asynchronous processing using message queues
+* Performance-aware engineering decisions
 
 ---
 
 ## Author
 
-Built by Rahul Chacko  
+Built by **Rahul Chacko**
 Software Engineer (Go)
+
+---
