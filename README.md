@@ -86,7 +86,7 @@ docker-compose.yml
 ### 1. Clone the repository
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/rahulchacko7/limit-order-book
 cd limit-order-book
 ```
 
